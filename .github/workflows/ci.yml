@@ -1,0 +1,147 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - release
+      - development
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - release
+      - development
+
+permissions:
+  contents: write
+  deployments: write
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Test
+        run: mvn -B -ntp clean test
+
+      - name: Package
+        run: mvn -B -ntp -DskipTests package
+
+  verify-tag-on-release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: test-and-build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag commit is on release branch
+        run: |
+          git fetch origin release --depth=1
+          git merge-base --is-ancestor "$GITHUB_SHA" "origin/release"
+
+  deploy-beta:
+    if: startsWith(github.ref, 'refs/tags/v') && contains(github.ref_name, '-beta')
+    needs: verify-tag-on-release
+    runs-on: ubuntu-latest
+    environment:
+      name: java-beta
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Build release artifact
+        run: mvn -B -ntp -DskipTests package
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tcknvkn-java-${{ github.ref_name }}
+          path: |
+            target/*.jar
+
+      - name: Create beta release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          prerelease: true
+          generate_release_notes: false
+          body: |
+            Java için TCKN (TC Kimlik No) ve VKN (Vergi Kimlik No) doğrulama kütüphanesi beta sürümü.
+
+            İlgili bağlantılar:
+            - https://www.tcknvkn.com/kutuphaneler
+            - https://www.tcknvkn.com/kutuphaneler/java
+            - https://www.tcknvkn.com/tc-uret
+            - https://www.tcknvkn.com/tc-no-uret
+            - https://www.tcknvkn.com/tc-uretici
+            - https://tcknvkn.com/tckn-uret
+            - https://www.tcknvkn.com/vergi-no-uret
+            - https://www.tcknvkn.com/vergi-no-uretici
+            - https://tcknvkn.com/vkn-uret
+
+            #tckn #vkn #java #tcknvkn #tcuret #vknuret
+
+  deploy-production:
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-beta')
+    needs: verify-tag-on-release
+    runs-on: ubuntu-latest
+    environment:
+      name: java-production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Build release artifact
+        run: mvn -B -ntp -DskipTests package
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tcknvkn-java-${{ github.ref_name }}
+          path: |
+            target/*.jar
+
+      - name: Create production release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          prerelease: false
+          generate_release_notes: false
+          body: |
+            Java için TCKN (TC Kimlik No) ve VKN (Vergi Kimlik No) doğrulama kütüphanesi kararlı sürümü.
+
+            İlgili bağlantılar:
+            - https://www.tcknvkn.com/kutuphaneler
+            - https://www.tcknvkn.com/kutuphaneler/nodejs
+            - https://www.tcknvkn.com/tc-uret
+            - https://www.tcknvkn.com/tc-no-uret
+            - https://www.tcknvkn.com/tc-uretici
+            - https://tcknvkn.com/tckn-uret
+            - https://www.tcknvkn.com/vergi-no-uret
+            - https://www.tcknvkn.com/vergi-no-uretici
+            - https://tcknvkn.com/vkn-uret
+
+            #tckn #vkn #java #tcknvkn #tcuret #vknuret
